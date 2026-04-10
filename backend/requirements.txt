@@ -1,0 +1,10 @@
+fastapi==0.115.0
+uvicorn==0.30.6
+sqlalchemy==2.0.35
+psycopg[binary]==3.2.3
+alembic==1.13.2
+pandas==2.2.3
+yfinance==0.2.43
+python-multipart==0.0.9
+pydantic==2.9.2
+python-dotenv==1.0.1
