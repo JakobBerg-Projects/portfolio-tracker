@@ -151,32 +151,17 @@ def calculate_portfolio_history(transactions: list[dict], period: str = "1y") ->
             qty = -qty
         pos_changes[d][t["ticker"]] = pos_changes[d].get(t["ticker"], 0) + qty
 
-    # All trading dates from price data
-    all_dates: set[date_type] = set()
-    for prices in all_prices.values():
-        all_dates.update(d.date() for d in prices.index)
-    dates = sorted(all_dates)
+    txn_date_set = set(pos_changes.keys())
 
-    txn_dates = sorted(pos_changes.keys())
-    txn_idx = 0
-    positions: dict[str, float] = {}
-
-    history = []
-    for d in dates:
-        # Apply transactions up to and including this date
-        while txn_idx < len(txn_dates) and txn_dates[txn_idx] <= d:
-            for ticker, qty in pos_changes[txn_dates[txn_idx]].items():
-                positions[ticker] = positions.get(ticker, 0) + qty
-            txn_idx += 1
-
-        # Exchange rate
+    # Helper: portfolio value from current positions at date d
+    def _portfolio_value(positions: dict[str, float], d: date_type) -> float:
         usd_nok = 10.5
         if usd_nok_df is not None:
             closest = usd_nok_df.index[usd_nok_df.index.date <= d]
             if len(closest) > 0:
                 usd_nok = float(usd_nok_df.loc[closest[-1]])
 
-        total_nok = 0.0
+        total = 0.0
         for ticker, quantity in positions.items():
             if quantity < 0.001 or ticker not in all_prices:
                 continue
@@ -188,14 +173,62 @@ def calculate_portfolio_history(transactions: list[dict], period: str = "1y") ->
             value = price * quantity
             if currency_map.get(ticker, "NOK") != "NOK":
                 value *= usd_nok
-            total_nok += value
+            total += value
+        return total
 
-        total_usd = total_nok / usd_nok if usd_nok > 0 else 0
-        history.append({
-            "date": d.isoformat(),
-            "total_value_nok": round(total_nok, 2),
-            "total_value_usd": round(total_usd, 2),
-        })
+    # All trading dates from price data
+    all_dates: set[date_type] = set()
+    for prices in all_prices.values():
+        all_dates.update(d.date() for d in prices.index)
+    dates = sorted(all_dates)
+
+    txn_dates = sorted(pos_changes.keys())
+    txn_idx = 0
+    positions: dict[str, float] = {}
+
+    # TWR state
+    twr_index = 1.0
+    value_after_last_flow: float | None = None
+
+    history = []
+    for d in dates:
+        # 1. Value BEFORE today's transactions (current positions, today's prices)
+        value_before = _portfolio_value(positions, d)
+
+        # 2. Check if there are cash flows (transactions) today
+        has_flow = False
+        while txn_idx < len(txn_dates) and txn_dates[txn_idx] <= d:
+            has_flow = True
+            for ticker, qty in pos_changes[txn_dates[txn_idx]].items():
+                positions[ticker] = positions.get(ticker, 0) + qty
+            txn_idx += 1
+
+        if has_flow:
+            # Close the previous sub-period
+            if value_after_last_flow is not None and value_after_last_flow > 0:
+                twr_index *= value_before / value_after_last_flow
+
+            # Value after applying transactions
+            value_after = _portfolio_value(positions, d)
+            value_after_last_flow = value_after
+
+            history.append({
+                "date": d.isoformat(),
+                "total_value_nok": round(value_after, 2),
+                "twr_pct": round((twr_index - 1) * 100, 2),
+            })
+        else:
+            # No cash flow — mid sub-period
+            if value_after_last_flow is not None and value_after_last_flow > 0:
+                current_twr = twr_index * (value_before / value_after_last_flow)
+            else:
+                current_twr = twr_index
+
+            history.append({
+                "date": d.isoformat(),
+                "total_value_nok": round(value_before, 2),
+                "twr_pct": round((current_twr - 1) * 100, 2),
+            })
 
     # "1d" → only keep last 2 data points (yesterday close vs today)
     if period == "1d" and len(history) > 2:

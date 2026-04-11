@@ -26,7 +26,7 @@ export interface PortfolioSummary {
 export interface PortfolioHistoryPoint {
   date: string;
   total_value_nok: number;
-  total_value_usd: number;
+  twr_pct: number;
 }
 
 export interface Allocation {

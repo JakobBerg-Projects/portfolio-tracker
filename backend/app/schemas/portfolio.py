@@ -27,7 +27,7 @@ class PortfolioSummary(BaseModel):
 class PortfolioHistoryPoint(BaseModel):
     date: str
     total_value_nok: float
-    total_value_usd: float
+    twr_pct: float
 
 
 class UploadResponse(BaseModel):

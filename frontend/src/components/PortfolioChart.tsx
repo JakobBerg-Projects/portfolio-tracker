@@ -9,6 +9,7 @@ import {
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
+  ReferenceLine,
 } from "recharts";
 import { getHistory, PortfolioHistoryPoint } from "@/lib/api";
 
@@ -72,19 +73,18 @@ export default function PortfolioChart({
     };
   }, [period, hasHoldings, refreshKey]);
 
-  const dataKey =
-    currency === "NOK" ? "total_value_nok" : "total_value_usd";
+  const periodInfo = useMemo(() => {
+    if (data.length < 1) return null;
+    const first = data[0];
+    const last = data[data.length - 1];
+    return {
+      twrPct: last.twr_pct,
+      lastValue: last.total_value_nok,
+      returnNok: first.total_value_nok * (last.twr_pct / 100),
+    };
+  }, [data]);
 
-  const periodChange = useMemo(() => {
-    if (data.length < 2) return null;
-    const first = data[0][dataKey];
-    const last = data[data.length - 1][dataKey];
-    const changeValue = last - first;
-    const changePct = first > 0 ? (changeValue / first) * 100 : 0;
-    return { value: changeValue, pct: changePct, lastValue: last };
-  }, [data, dataKey]);
-
-  const isPositive = (periodChange?.value ?? 0) >= 0;
+  const isPositive = (periodInfo?.twrPct ?? 0) >= 0;
   const lineColor = isPositive ? "#22c55e" : "#ef4444";
 
   const formatDate = (dateStr: string) => {
@@ -107,8 +107,6 @@ export default function PortfolioChart({
     });
   };
 
-  const formatValue = (value: number) => formatCurrency(value, currency);
-
   if (!hasHoldings) {
     return (
       <div className="bg-white dark:bg-gray-900 rounded-lg shadow p-6 border border-gray-100 dark:border-gray-800 h-[430px] flex items-center justify-center">
@@ -121,15 +119,15 @@ export default function PortfolioChart({
 
   return (
     <div className="bg-white dark:bg-gray-900 rounded-lg shadow p-6 border border-gray-100 dark:border-gray-800">
-      {/* Header with value and change */}
+      {/* Header with value and TWR */}
       <div className="mb-4">
         <h2 className="text-sm text-gray-500 dark:text-gray-400">
           Porteføljeverdi
         </h2>
-        {periodChange ? (
+        {periodInfo ? (
           <>
             <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">
-              {formatCurrency(periodChange.lastValue, currency)}
+              {formatCurrency(periodInfo.lastValue, currency)}
             </p>
             <p
               className={`text-sm font-medium ${
@@ -138,9 +136,8 @@ export default function PortfolioChart({
                   : "text-red-600 dark:text-red-400"
               }`}
             >
-              {periodChange.value >= 0 ? "+" : ""}
-              {formatCurrency(periodChange.value, currency)} (
-              {formatPct(periodChange.pct)})
+              {periodInfo.returnNok >= 0 ? "+" : ""}
+              {formatCurrency(periodInfo.returnNok, currency)} ({formatPct(periodInfo.twrPct)})
             </p>
           </>
         ) : loading ? (
@@ -200,14 +197,15 @@ export default function PortfolioChart({
               stroke="#9ca3af"
             />
             <YAxis
-              tickFormatter={formatValue}
+              tickFormatter={(v) => `${v.toFixed(1)}%`}
               tick={{ fontSize: 12 }}
-              width={120}
+              width={70}
               stroke="#9ca3af"
               domain={["auto", "auto"]}
             />
+            <ReferenceLine y={0} stroke="#6b7280" strokeDasharray="3 3" />
             <Tooltip
-              formatter={(value) => [formatValue(Number(value)), "Verdi"]}
+              formatter={(value) => [formatPct(Number(value)), "Avkastning"]}
               labelFormatter={(label) =>
                 new Date(String(label)).toLocaleDateString("nb-NO", {
                   day: "numeric",
@@ -224,7 +222,7 @@ export default function PortfolioChart({
             />
             <Line
               type="monotone"
-              dataKey={dataKey}
+              dataKey="twr_pct"
               stroke={lineColor}
               strokeWidth={2}
               dot={false}
