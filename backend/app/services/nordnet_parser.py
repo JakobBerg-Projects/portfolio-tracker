@@ -51,6 +51,13 @@ TICKER_MAP = {
     "Sea ADR A": "SE",
     "Alibaba Group ADR": "BABA",
     "StoneCo A Common Share": "STNE",
+    # Norwegian mutual funds (Morningstar tickers on Yahoo Finance)
+    "KLP AksjeFremvoksende Markeder Indeks N": "0P0001OPBE.IR",
+    "KLP AksjeFremvoksende Markeder Indeks P": "0P0000TJ5D.IR",
+    "KLP AksjeFremvoksende Markeder Indeks S": "0P0000TJ5C.IR",
+    "Nordnet Global Indeks NOK": "0P0001K6NJ.IR",
+    "Nordnet Global Indeks 125 NOK": "0P0001RMV1.IR",
+    "Nordnet Norge Indeks": "0P000134K7.IR",
 }
 
 

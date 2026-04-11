@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { CurrencyProvider } from "@/lib/currency-context";
+import { AuthProvider } from "@/lib/auth-context";
 import AppShell from "@/components/AppShell";
 
 const geistSans = Geist({
@@ -43,9 +44,11 @@ export default function RootLayout({
         />
       </head>
       <body className="min-h-full flex flex-col">
-        <CurrencyProvider>
-          <AppShell>{children}</AppShell>
-        </CurrencyProvider>
+        <AuthProvider>
+          <CurrencyProvider>
+            <AppShell>{children}</AppShell>
+          </CurrencyProvider>
+        </AuthProvider>
       </body>
     </html>
   );

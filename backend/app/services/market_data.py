@@ -1,12 +1,12 @@
-import yfinance as yf
 from datetime import datetime, timedelta, date as date_type
+
+from app.services import yf_cache
 
 
 def fetch_exchange_rate(from_currency: str = "USD", to_currency: str = "NOK") -> float:
     try:
         pair = f"{from_currency}{to_currency}=X"
-        ticker = yf.Ticker(pair)
-        hist = ticker.history(period="5d")
+        hist = yf_cache.get_history(pair, period="5d")
         if not hist.empty:
             return float(hist["Close"].iloc[-1])
     except Exception:
@@ -33,7 +33,7 @@ def fetch_live_data(tickers: list[str]) -> tuple[dict[str, float], dict[str, flo
     if not tickers:
         return prices, changes
     try:
-        data = yf.download(tickers, period="5d", progress=False)
+        data = yf_cache.download(tickers, period="5d", progress=False)
         if data.empty:
             return prices, changes
 
@@ -111,7 +111,7 @@ def calculate_portfolio_history(transactions: list[dict], period: str = "1y") ->
     all_prices: dict = {}
     for ticker in tickers:
         try:
-            hist = yf.Ticker(ticker).history(**hist_kwargs)
+            hist = yf_cache.get_history(ticker, **hist_kwargs)
             if hist.empty:
                 continue
             close = hist["Close"].dropna()
@@ -126,7 +126,7 @@ def calculate_portfolio_history(transactions: list[dict], period: str = "1y") ->
     # USD/NOK history
     usd_nok_df = None
     try:
-        fx_hist = yf.Ticker("USDNOK=X").history(**hist_kwargs)
+        fx_hist = yf_cache.get_history("USDNOK=X", **hist_kwargs)
         if not fx_hist.empty:
             close = fx_hist["Close"].dropna()
             if hasattr(close, "columns"):
@@ -140,18 +140,46 @@ def calculate_portfolio_history(transactions: list[dict], period: str = "1y") ->
     if not all_prices:
         return []
 
+    # Fetch stock split data for all tickers.
+    # For each ticker, compute the cumulative forward split factor so we can
+    # adjust historical transaction quantities to current share counts.
+    # yfinance prices are already split-adjusted, so quantities must match.
+    splits_by_ticker: dict[str, list[tuple[date_type, float]]] = {}
+    for ticker in tickers:
+        try:
+            splits = yf_cache.get_splits(ticker)
+            if len(splits) > 0:
+                result = []
+                for dt, ratio in splits.items():
+                    sd = dt.date() if hasattr(dt, "date") else dt
+                    if sd >= first_txn_date:
+                        result.append((sd, float(ratio)))
+                if result:
+                    splits_by_ticker[ticker] = sorted(result, key=lambda x: x[0])
+        except Exception:
+            pass
+
+    def _forward_split_factor(ticker: str, after_date: date_type) -> float:
+        """Cumulative split ratio for all splits strictly after a given date."""
+        if ticker not in splits_by_ticker:
+            return 1.0
+        factor = 1.0
+        for sd, ratio in splits_by_ticker[ticker]:
+            if sd > after_date:
+                factor *= ratio
+        return factor
+
     # Build position-change timeline  {date -> {ticker -> qty_change}}
+    # Quantities are adjusted to current (post-all-splits) share counts.
     pos_changes: dict[date_type, dict[str, float]] = {}
     for t in sorted_txns:
         d = t["trade_date"] if isinstance(t["trade_date"], date_type) else date_type.fromisoformat(t["trade_date"])
         if d not in pos_changes:
             pos_changes[d] = {}
-        qty = t["quantity"]
+        qty = t["quantity"] * _forward_split_factor(t["ticker"], d)
         if t["transaction_type"] == "SALG":
             qty = -qty
         pos_changes[d][t["ticker"]] = pos_changes[d].get(t["ticker"], 0) + qty
-
-    txn_date_set = set(pos_changes.keys())
 
     # Helper: portfolio value from current positions at date d
     def _portfolio_value(positions: dict[str, float], d: date_type) -> float:

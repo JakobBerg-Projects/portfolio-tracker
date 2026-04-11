@@ -7,7 +7,8 @@ from datetime import date as date_type, timedelta
 import numpy as np
 import pandas as pd
 import statsmodels.api as sm
-import yfinance as yf
+
+from app.services import yf_cache
 
 
 # ---------------------------------------------------------------------------
@@ -127,8 +128,8 @@ def _current_tickers(transactions: list[dict]) -> list[str]:
     splits_cache: dict[str, list[tuple[date_type, float]]] = {}
     for ticker, txns in txn_by_ticker.items():
         try:
-            splits = yf.Ticker(ticker).splits
-            if splits is not None and not splits.empty:
+            splits = yf_cache.get_splits(ticker)
+            if len(splits) > 0:
                 earliest = min(
                     t["trade_date"] if isinstance(t["trade_date"], date_type)
                     else date_type.fromisoformat(str(t["trade_date"]))
@@ -351,7 +352,7 @@ def _fetch_individual_returns(tickers: list[str], period: str = "1y") -> pd.Data
     all_returns: dict[str, pd.Series] = {}
     for ticker in tickers:
         try:
-            hist = yf.Ticker(ticker).history(start=start.isoformat())
+            hist = yf_cache.get_history(ticker, start=start.isoformat())
             if hist.empty:
                 continue
             close = hist["Close"].dropna()

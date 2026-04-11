@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import CSVUpload from "@/components/CSVUpload";
 import SummaryCards from "@/components/SummaryCards";
 import PortfolioChart from "@/components/PortfolioChart";
@@ -44,6 +44,10 @@ export default function Home() {
 
     setRefreshKey((k) => k + 1);
   }, []);
+
+  useEffect(() => {
+    refreshData();
+  }, [refreshData]);
 
   return (
     <main className="max-w-7xl mx-auto px-4 py-6 space-y-6">

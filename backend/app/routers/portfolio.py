@@ -1,11 +1,12 @@
 from datetime import date as date_type
 
-import yfinance as yf
 from fastapi import APIRouter, Depends, UploadFile, File, HTTPException
 from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models.holding import Transaction
+from app.models.user import User
+from app.services.auth import get_current_user
 from app.schemas.portfolio import (
     HoldingResponse,
     PortfolioSummary,
@@ -18,6 +19,7 @@ from app.services.market_data import (
     fetch_exchange_rate,
     fetch_live_data,
 )
+from app.services import yf_cache
 
 router = APIRouter(prefix="/api/portfolio", tags=["portfolio"])
 
@@ -33,8 +35,8 @@ def _get_split_multipliers(ticker: str, start_date: date_type) -> list[tuple[dat
     E.g. a 10:1 split on 2024-06-10 returns [(2024-06-10, 10.0)].
     """
     try:
-        splits = yf.Ticker(ticker).splits
-        if splits is None or splits.empty:
+        splits = yf_cache.get_splits(ticker)
+        if len(splits) == 0:
             return []
         result = []
         for dt, ratio in splits.items():
@@ -136,6 +138,7 @@ async def upload_csv(
     file: UploadFile = File(...),
     mode: str = "replace",
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """Upload a Nordnet transaction-history CSV."""
     content = await file.read()
@@ -153,14 +156,14 @@ async def upload_csv(
         raise HTTPException(status_code=400, detail="No transactions found in CSV")
 
     if mode == "replace":
-        db.query(Transaction).delete()
+        db.query(Transaction).filter_by(user_id=current_user.id).delete()
 
     count = 0
     for t in parsed:
         if mode == "append" and t["nordnet_id"]:
             exists = (
                 db.query(Transaction)
-                .filter_by(nordnet_id=t["nordnet_id"])
+                .filter_by(nordnet_id=t["nordnet_id"], user_id=current_user.id)
                 .first()
             )
             if exists:
@@ -168,6 +171,7 @@ async def upload_csv(
 
         db.add(
             Transaction(
+                user_id=current_user.id,
                 nordnet_id=t["nordnet_id"] or None,
                 trade_date=date_type.fromisoformat(t["trade_date"]),
                 transaction_type=t["transaction_type"],
@@ -192,9 +196,9 @@ async def upload_csv(
 
 
 @router.get("/holdings")
-def get_holdings(db: Session = Depends(get_db)):
+def get_holdings(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Derive current holdings from transactions, enriched with live prices."""
-    transactions = db.query(Transaction).order_by(Transaction.trade_date).all()
+    transactions = db.query(Transaction).filter_by(user_id=current_user.id).order_by(Transaction.trade_date).all()
     if not transactions:
         return []
 
@@ -241,8 +245,8 @@ def get_holdings(db: Session = Depends(get_db)):
 
 
 @router.get("/summary", response_model=PortfolioSummary)
-def get_summary(db: Session = Depends(get_db)):
-    transactions = db.query(Transaction).order_by(Transaction.trade_date).all()
+def get_summary(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    transactions = db.query(Transaction).filter_by(user_id=current_user.id).order_by(Transaction.trade_date).all()
     if not transactions:
         return PortfolioSummary(
             total_value_nok=0,
@@ -293,8 +297,8 @@ def get_summary(db: Session = Depends(get_db)):
 
 
 @router.get("/history", response_model=list[PortfolioHistoryPoint])
-def get_history(period: str = "1y", db: Session = Depends(get_db)):
-    transactions = db.query(Transaction).order_by(Transaction.trade_date).all()
+def get_history(period: str = "1y", db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    transactions = db.query(Transaction).filter_by(user_id=current_user.id).order_by(Transaction.trade_date).all()
     if not transactions:
         return []
 
@@ -314,8 +318,8 @@ def get_history(period: str = "1y", db: Session = Depends(get_db)):
 
 
 @router.get("/allocation")
-def get_allocation(db: Session = Depends(get_db)):
-    transactions = db.query(Transaction).order_by(Transaction.trade_date).all()
+def get_allocation(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    transactions = db.query(Transaction).filter_by(user_id=current_user.id).order_by(Transaction.trade_date).all()
     if not transactions:
         return []
 

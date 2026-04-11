@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Float, DateTime, Date
+from sqlalchemy import Column, Integer, String, Float, DateTime, Date, ForeignKey
 from sqlalchemy.sql import func
 from app.database import Base
 
@@ -7,6 +7,7 @@ class Transaction(Base):
     __tablename__ = "transactions"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
     nordnet_id = Column(String, unique=True, index=True)
     trade_date = Column(Date, nullable=False, index=True)
     transaction_type = Column(String, nullable=False)  # KJØPT / SALG

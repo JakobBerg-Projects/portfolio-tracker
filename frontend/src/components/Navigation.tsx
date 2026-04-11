@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useAuth } from "@/lib/auth-context";
 
 const TABS = [
   { href: "/", label: "Oversikt" },
@@ -19,6 +20,7 @@ export default function Navigation({
   onCurrencyChange,
 }: NavigationProps) {
   const pathname = usePathname();
+  const { user, logout } = useAuth();
   const [dark, setDark] = useState(true);
 
   useEffect(() => {
@@ -81,6 +83,17 @@ export default function Navigation({
               USD
             </button>
           </div>
+          {user && (
+            <button
+              onClick={() => {
+                logout();
+                window.location.href = "/login";
+              }}
+              className="px-3 py-1.5 rounded-md text-sm font-medium text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-gray-200 transition-colors"
+            >
+              Logg ut
+            </button>
+          )}
           <button
             onClick={toggleDark}
             className="p-2 rounded-lg bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"

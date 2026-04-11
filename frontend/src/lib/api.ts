@@ -1,5 +1,10 @@
 const API_BASE = "";
 
+function authHeaders(): HeadersInit {
+  const token = typeof window !== "undefined" ? localStorage.getItem("auth_token") : null;
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
 export interface Holding {
   id: number;
   name: string;
@@ -42,6 +47,7 @@ export async function uploadCSV(file: File, mode: "replace" | "append" = "replac
 
   const res = await fetch(`${API_BASE}/api/portfolio/upload?mode=${mode}`, {
     method: "POST",
+    headers: authHeaders(),
     body: formData,
   });
 
@@ -60,25 +66,25 @@ export async function uploadCSV(file: File, mode: "replace" | "append" = "replac
 }
 
 export async function getHoldings(): Promise<Holding[]> {
-  const res = await fetch(`${API_BASE}/api/portfolio/holdings`);
+  const res = await fetch(`${API_BASE}/api/portfolio/holdings`, { headers: authHeaders() });
   if (!res.ok) throw new Error("Failed to fetch holdings");
   return res.json();
 }
 
 export async function getSummary(): Promise<PortfolioSummary> {
-  const res = await fetch(`${API_BASE}/api/portfolio/summary`);
+  const res = await fetch(`${API_BASE}/api/portfolio/summary`, { headers: authHeaders() });
   if (!res.ok) throw new Error("Failed to fetch summary");
   return res.json();
 }
 
 export async function getHistory(period: string = "1y"): Promise<PortfolioHistoryPoint[]> {
-  const res = await fetch(`${API_BASE}/api/portfolio/history?period=${period}`);
+  const res = await fetch(`${API_BASE}/api/portfolio/history?period=${period}`, { headers: authHeaders() });
   if (!res.ok) throw new Error("Failed to fetch history");
   return res.json();
 }
 
 export async function getAllocation(): Promise<Allocation[]> {
-  const res = await fetch(`${API_BASE}/api/portfolio/allocation`);
+  const res = await fetch(`${API_BASE}/api/portfolio/allocation`, { headers: authHeaders() });
   if (!res.ok) throw new Error("Failed to fetch allocation");
   return res.json();
 }
@@ -152,25 +158,25 @@ export interface ContagionAnalysis {
 }
 
 export async function getFactorExposure(period: string = "3y"): Promise<FactorExposure> {
-  const res = await fetch(`${API_BASE}/api/analysis/factors?period=${period}`);
+  const res = await fetch(`${API_BASE}/api/analysis/factors?period=${period}`, { headers: authHeaders() });
   if (!res.ok) throw new Error("Failed to fetch factor exposure");
   return res.json();
 }
 
 export async function getRiskMetrics(period: string = "1y"): Promise<RiskMetrics> {
-  const res = await fetch(`${API_BASE}/api/analysis/risk?period=${period}`);
+  const res = await fetch(`${API_BASE}/api/analysis/risk?period=${period}`, { headers: authHeaders() });
   if (!res.ok) throw new Error("Failed to fetch risk metrics");
   return res.json();
 }
 
 export async function getCorrelationMatrix(period: string = "1y"): Promise<CorrelationMatrix> {
-  const res = await fetch(`${API_BASE}/api/analysis/correlation?period=${period}`);
+  const res = await fetch(`${API_BASE}/api/analysis/correlation?period=${period}`, { headers: authHeaders() });
   if (!res.ok) throw new Error("Failed to fetch correlation matrix");
   return res.json();
 }
 
 export async function getContagionAnalysis(period: string = "1y"): Promise<ContagionAnalysis> {
-  const res = await fetch(`${API_BASE}/api/analysis/contagion?period=${period}`);
+  const res = await fetch(`${API_BASE}/api/analysis/contagion?period=${period}`, { headers: authHeaders() });
   if (!res.ok) throw new Error("Failed to fetch contagion analysis");
   return res.json();
 }
