@@ -28,7 +28,7 @@ export default function SummaryCards({ summary, currency }: SummaryCardsProps) {
       value: formatNumber(totalValue, currency),
     },
     {
-      label: "Avkastning",
+      label: "Urealisert gevinst",
       value: formatNumber(summary.total_return_nok, "NOK"),
       sub: `${summary.total_return_pct >= 0 ? "+" : ""}${summary.total_return_pct}%`,
       color: summary.total_return_nok >= 0 ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400",

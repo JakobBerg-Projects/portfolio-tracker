@@ -1,1 +1,1 @@
-from app.routers import portfolio
+from app.routers import portfolio, analysis
