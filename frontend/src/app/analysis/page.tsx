@@ -122,10 +122,8 @@ export default function AnalysisPage() {
         <FactorExposureCard data={factors} loading={loadingFactors} />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <CorrelationMatrixCard data={correlation} loading={loadingCorrelation} />
-        <ContagionCard data={contagion} loading={loadingContagion} />
-      </div>
+      <CorrelationMatrixCard data={correlation} loading={loadingCorrelation} />
+      <ContagionCard data={contagion} loading={loadingContagion} />
     </main>
   );
 }

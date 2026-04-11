@@ -112,6 +112,79 @@ def _detect_non_us_tickers(transactions: list[dict]) -> list[str]:
     return list(non_us.keys())
 
 
+def _current_tickers(transactions: list[dict]) -> list[str]:
+    """Return tickers that are currently held (positive position).
+
+    Accounts for stock splits by adjusting pre-split quantities.
+    """
+    # Group by ticker to fetch splits
+    txn_by_ticker: dict[str, list[dict]] = {}
+    for t in transactions:
+        ticker = t.get("ticker", "")
+        if ticker:
+            txn_by_ticker.setdefault(ticker, []).append(t)
+
+    splits_cache: dict[str, list[tuple[date_type, float]]] = {}
+    for ticker, txns in txn_by_ticker.items():
+        try:
+            splits = yf.Ticker(ticker).splits
+            if splits is not None and not splits.empty:
+                earliest = min(
+                    t["trade_date"] if isinstance(t["trade_date"], date_type)
+                    else date_type.fromisoformat(str(t["trade_date"]))
+                    for t in txns
+                )
+                result = []
+                for dt, ratio in splits.items():
+                    sd = dt.date() if hasattr(dt, "date") else dt
+                    if sd >= earliest:
+                        result.append((sd, float(ratio)))
+                if result:
+                    splits_cache[ticker] = sorted(result, key=lambda x: x[0])
+        except Exception:
+            pass
+
+    positions: dict[str, float] = {}
+    splits_applied: dict[str, set] = {}
+
+    sorted_txns = sorted(transactions, key=lambda t: (
+        t["trade_date"] if isinstance(t["trade_date"], date_type)
+        else date_type.fromisoformat(str(t["trade_date"]))
+    ))
+
+    for t in sorted_txns:
+        ticker = t.get("ticker", "")
+        if not ticker:
+            continue
+
+        trade_date = t["trade_date"] if isinstance(t["trade_date"], date_type) else date_type.fromisoformat(str(t["trade_date"]))
+
+        if ticker not in positions:
+            positions[ticker] = 0.0
+            splits_applied[ticker] = set()
+
+        # Apply splits up to this transaction date
+        if ticker in splits_cache:
+            for sd, ratio in splits_cache[ticker]:
+                if sd <= trade_date and sd not in splits_applied[ticker]:
+                    positions[ticker] *= ratio
+                    splits_applied[ticker].add(sd)
+
+        qty = t.get("quantity", 0)
+        if t.get("transaction_type") == "SALG":
+            qty = -qty
+        positions[ticker] += qty
+
+    # Apply remaining splits after last transaction
+    for ticker, splits in splits_cache.items():
+        if ticker in positions:
+            for sd, ratio in splits:
+                if sd not in splits_applied.get(ticker, set()):
+                    positions[ticker] *= ratio
+
+    return [t for t, q in positions.items() if q > 0.001]
+
+
 # ---------------------------------------------------------------------------
 # Fama-French regression
 # ---------------------------------------------------------------------------
@@ -301,8 +374,8 @@ def _fetch_individual_returns(tickers: list[str], period: str = "1y") -> pd.Data
 
 
 def compute_correlation_matrix(transactions: list[dict], period: str = "1y") -> dict:
-    """Compute pairwise return correlations between holdings."""
-    tickers = list(set(t["ticker"] for t in transactions if t.get("ticker")))
+    """Compute pairwise return correlations between current holdings."""
+    tickers = _current_tickers(transactions)
     if len(tickers) < 2:
         return {"error": "Trenger minst 2 aksjer for korrelasjonsanalyse"}
 
@@ -351,8 +424,9 @@ def compute_contagion_analysis(transactions: list[dict], period: str = "1y") -> 
     """Compare correlations in normal vs. stress periods.
 
     Stress is defined as days where the portfolio return is below -1 std dev.
+    Only considers currently held positions.
     """
-    tickers = list(set(t["ticker"] for t in transactions if t.get("ticker")))
+    tickers = _current_tickers(transactions)
     if len(tickers) < 2:
         return {"error": "Trenger minst 2 aksjer for contagion-analyse"}
 

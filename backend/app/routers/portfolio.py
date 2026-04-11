@@ -1,5 +1,6 @@
 from datetime import date as date_type
 
+import yfinance as yf
 from fastapi import APIRouter, Depends, UploadFile, File, HTTPException
 from sqlalchemy.orm import Session
 
@@ -25,8 +26,47 @@ router = APIRouter(prefix="/api/portfolio", tags=["portfolio"])
 # Helpers
 # ---------------------------------------------------------------------------
 
+def _get_split_multipliers(ticker: str, start_date: date_type) -> list[tuple[date_type, float]]:
+    """Fetch stock split history for a ticker from yfinance.
+
+    Returns a list of (date, cumulative_multiplier) pairs sorted by date.
+    E.g. a 10:1 split on 2024-06-10 returns [(2024-06-10, 10.0)].
+    """
+    try:
+        splits = yf.Ticker(ticker).splits
+        if splits is None or splits.empty:
+            return []
+        result = []
+        for dt, ratio in splits.items():
+            split_date = dt.date() if hasattr(dt, "date") else dt
+            if split_date >= start_date:
+                result.append((split_date, float(ratio)))
+        return sorted(result, key=lambda x: x[0])
+    except Exception:
+        return []
+
+
 def _derive_holdings(transactions) -> list[dict]:
-    """Derive current positions from transaction history (weighted-average cost)."""
+    """Derive current positions from transaction history (weighted-average cost).
+
+    Accounts for stock splits by adjusting quantity and cost basis
+    when a split occurs between transactions.
+    """
+    # Group transactions by ticker to know which tickers need split data
+    txn_by_ticker: dict[str, list] = {}
+    for txn in transactions:
+        if not txn.ticker:
+            continue
+        txn_by_ticker.setdefault(txn.ticker, []).append(txn)
+
+    # Fetch split data for each ticker
+    splits_by_ticker: dict[str, list[tuple[date_type, float]]] = {}
+    for ticker, txns in txn_by_ticker.items():
+        earliest = min(t.trade_date for t in txns)
+        splits = _get_split_multipliers(ticker, earliest)
+        if splits:
+            splits_by_ticker[ticker] = splits
+
     positions: dict[str, dict] = {}
 
     for txn in sorted(transactions, key=lambda t: t.trade_date):
@@ -43,7 +83,16 @@ def _derive_holdings(transactions) -> list[dict]:
                 "quantity": 0.0,
                 "cost_native": 0.0,
                 "cost_nok": 0.0,
+                "_splits_applied": set(),
             }
+
+        # Apply any splits that occurred on or before this transaction date
+        if ticker in splits_by_ticker:
+            for split_date, ratio in splits_by_ticker[ticker]:
+                if split_date <= txn.trade_date and split_date not in positions[ticker]["_splits_applied"]:
+                    positions[ticker]["quantity"] *= ratio
+                    # Cost basis stays the same in total, but per-share cost drops
+                    positions[ticker]["_splits_applied"].add(split_date)
 
         if txn.transaction_type == "KJØPT":
             positions[ticker]["quantity"] += txn.quantity
@@ -57,12 +106,22 @@ def _derive_holdings(transactions) -> list[dict]:
                 positions[ticker]["cost_nok"] *= 1 - ratio
             positions[ticker]["quantity"] -= txn.quantity
 
+    # Apply any remaining splits that haven't been applied yet (after last transaction)
+    for ticker, splits in splits_by_ticker.items():
+        if ticker in positions:
+            for split_date, ratio in splits:
+                if split_date not in positions[ticker]["_splits_applied"]:
+                    positions[ticker]["quantity"] *= ratio
+                    positions[ticker]["_splits_applied"].add(split_date)
+
     result = []
     for pos in positions.values():
         if pos["quantity"] > 0.001:
             avg_price = (
                 pos["cost_native"] / pos["quantity"] if pos["quantity"] > 0 else 0
             )
+            # Remove internal tracking field
+            pos.pop("_splits_applied", None)
             result.append({**pos, "avg_price": avg_price})
     return result
 

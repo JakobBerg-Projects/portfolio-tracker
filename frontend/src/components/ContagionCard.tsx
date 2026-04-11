@@ -136,95 +136,100 @@ export default function ContagionCard({
         </div>
       </div>
 
-      {/* Summary bars */}
-      <div className="mb-4 grid grid-cols-2 gap-4">
-        <div className="p-3 bg-gray-50 dark:bg-gray-800/50 rounded-lg text-center">
-          <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">
-            Normal korrelasjon
-          </p>
-          <p className="text-lg font-semibold text-gray-900 dark:text-gray-100">
-            {data.avg_normal_correlation.toFixed(2)}
-          </p>
-        </div>
-        <div className="p-3 bg-red-50 dark:bg-red-900/20 rounded-lg text-center">
-          <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">
-            Stresskorrelasjon
-          </p>
-          <p className="text-lg font-semibold text-gray-900 dark:text-gray-100">
-            {data.avg_stress_correlation.toFixed(2)}
-          </p>
-        </div>
-      </div>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Left column: summary + interpretation */}
+        <div className="space-y-4">
+          <div className="grid grid-cols-2 gap-3">
+            <div className="p-3 bg-gray-50 dark:bg-gray-800/50 rounded-lg text-center">
+              <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">
+                Normal korrelasjon
+              </p>
+              <p className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+                {data.avg_normal_correlation.toFixed(2)}
+              </p>
+            </div>
+            <div className="p-3 bg-red-50 dark:bg-red-900/20 rounded-lg text-center">
+              <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">
+                Stresskorrelasjon
+              </p>
+              <p className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+                {data.avg_stress_correlation.toFixed(2)}
+              </p>
+            </div>
+          </div>
 
-      {interpretation.length > 0 && (
-        <div className="mb-4 p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg space-y-2">
-          <p className="text-xs font-semibold text-blue-800 dark:text-blue-300 uppercase tracking-wide">
-            Tolkning
-          </p>
-          {interpretation.map((line, i) => (
-            <p
-              key={i}
-              className={`text-sm text-blue-900 dark:text-blue-200 ${
-                i === 0 ? "font-medium" : ""
-              }`}
-            >
-              {line}
-            </p>
-          ))}
-        </div>
-      )}
-
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-gray-200 dark:border-gray-700">
-              <th className="text-left py-2 text-gray-500 dark:text-gray-400 font-medium">
-                Par
-              </th>
-              <th className="text-right py-2 text-gray-500 dark:text-gray-400 font-medium">
-                Normal
-              </th>
-              <th className="text-right py-2 text-gray-500 dark:text-gray-400 font-medium">
-                Stress
-              </th>
-              <th className="text-right py-2 text-gray-500 dark:text-gray-400 font-medium">
-                Endring
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {data.pairs
-              .sort((a, b) => b.change - a.change)
-              .map((pair) => (
-                <tr
-                  key={`${pair.ticker_1}-${pair.ticker_2}`}
-                  className="border-b border-gray-100 dark:border-gray-800 last:border-0"
+          {interpretation.length > 0 && (
+            <div className="p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg space-y-2">
+              <p className="text-xs font-semibold text-blue-800 dark:text-blue-300 uppercase tracking-wide">
+                Tolkning
+              </p>
+              {interpretation.map((line, i) => (
+                <p
+                  key={i}
+                  className={`text-sm text-blue-900 dark:text-blue-200 ${
+                    i === 0 ? "font-medium" : ""
+                  }`}
                 >
-                  <td className="py-2 text-gray-900 dark:text-gray-100 font-medium">
-                    {pair.ticker_1} / {pair.ticker_2}
-                  </td>
-                  <td className="py-2 text-right font-mono text-gray-600 dark:text-gray-400">
-                    {pair.normal_correlation.toFixed(2)}
-                  </td>
-                  <td className="py-2 text-right font-mono text-gray-600 dark:text-gray-400">
-                    {pair.stress_correlation.toFixed(2)}
-                  </td>
-                  <td className="py-2 text-right font-mono">
-                    <DeltaIndicator change={pair.change} />
-                  </td>
-                </tr>
+                  {line}
+                </p>
               ))}
-          </tbody>
-        </table>
-      </div>
+            </div>
+          )}
 
-      <div className="mt-4 p-3 bg-gray-50 dark:bg-gray-800/50 rounded-lg">
-        <p className="text-xs text-gray-500 dark:text-gray-400">
-          Stressperioder defineres som dager der porteføljeavkastningen er lavere
-          enn snittet minus ett standardavvik. Positiv endring (rød) betyr at
-          korrelasjonen øker under stress, noe som reduserer diversifiseringsgevinsten
-          nettopp når den trengs mest.
-        </p>
+          <div className="p-3 bg-gray-50 dark:bg-gray-800/50 rounded-lg">
+            <p className="text-xs text-gray-500 dark:text-gray-400">
+              Stressperioder defineres som dager der porteføljeavkastningen er lavere
+              enn snittet minus ett standardavvik. Positiv endring (rød) betyr at
+              korrelasjonen øker under stress, noe som reduserer diversifiseringsgevinsten
+              nettopp når den trengs mest.
+            </p>
+          </div>
+        </div>
+
+        {/* Right column: pair table spanning 2 cols */}
+        <div className="lg:col-span-2 overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-gray-200 dark:border-gray-700">
+                <th className="text-left py-2 text-gray-500 dark:text-gray-400 font-medium">
+                  Par
+                </th>
+                <th className="text-right py-2 text-gray-500 dark:text-gray-400 font-medium">
+                  Normal
+                </th>
+                <th className="text-right py-2 text-gray-500 dark:text-gray-400 font-medium">
+                  Stress
+                </th>
+                <th className="text-right py-2 text-gray-500 dark:text-gray-400 font-medium">
+                  Endring
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {data.pairs
+                .sort((a, b) => b.change - a.change)
+                .map((pair) => (
+                  <tr
+                    key={`${pair.ticker_1}-${pair.ticker_2}`}
+                    className="border-b border-gray-100 dark:border-gray-800 last:border-0"
+                  >
+                    <td className="py-2 text-gray-900 dark:text-gray-100 font-medium">
+                      {pair.ticker_1} / {pair.ticker_2}
+                    </td>
+                    <td className="py-2 text-right font-mono text-gray-600 dark:text-gray-400">
+                      {pair.normal_correlation.toFixed(2)}
+                    </td>
+                    <td className="py-2 text-right font-mono text-gray-600 dark:text-gray-400">
+                      {pair.stress_correlation.toFixed(2)}
+                    </td>
+                    <td className="py-2 text-right font-mono">
+                      <DeltaIndicator change={pair.change} />
+                    </td>
+                  </tr>
+                ))}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   );
