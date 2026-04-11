@@ -10,22 +10,19 @@ import PortfolioTreemap from "@/components/PortfolioTreemap";
 import {
   getHoldings,
   getSummary,
-  getHistory,
   getAllocation,
   Holding,
   PortfolioSummary,
-  PortfolioHistoryPoint,
   Allocation,
 } from "@/lib/api";
 
 export default function Home() {
   const [holdings, setHoldings] = useState<Holding[]>([]);
   const [summary, setSummary] = useState<PortfolioSummary | null>(null);
-  const [history, setHistory] = useState<PortfolioHistoryPoint[]>([]);
   const [allocation, setAllocation] = useState<Allocation[]>([]);
   const [currency, setCurrency] = useState<"NOK" | "USD">("NOK");
   const [loading, setLoading] = useState(false);
-  const [historyLoading, setHistoryLoading] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0);
   const [dark, setDark] = useState(true);
 
   useEffect(() => {
@@ -56,15 +53,8 @@ export default function Home() {
       setLoading(false);
     }
 
-    setHistoryLoading(true);
-    try {
-      const hist = await getHistory("1y");
-      setHistory(hist);
-    } catch (e) {
-      console.error("Failed to load history:", e);
-    } finally {
-      setHistoryLoading(false);
-    }
+    // Bump refreshKey so PortfolioChart refetches
+    setRefreshKey((k) => k + 1);
   }, []);
 
   return (
@@ -130,17 +120,11 @@ export default function Home() {
             <SummaryCards summary={summary} currency={currency} />
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <div>
-                {historyLoading ? (
-                  <div className="bg-white dark:bg-gray-900 rounded-lg shadow p-6 border border-gray-100 dark:border-gray-800 h-[430px] flex items-center justify-center">
-                    <p className="text-gray-400 dark:text-gray-500">
-                      Henter kurshistorikk fra Yahoo Finance...
-                    </p>
-                  </div>
-                ) : (
-                  <PortfolioChart data={history} currency={currency} />
-                )}
-              </div>
+              <PortfolioChart
+                currency={currency}
+                hasHoldings={summary.holdings_count > 0}
+                refreshKey={refreshKey}
+              />
               <AllocationPie data={allocation} />
             </div>
 

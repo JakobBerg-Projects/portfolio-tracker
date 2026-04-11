@@ -27,6 +27,7 @@ const columns: { key: SortKey; label: string; align: "left" | "right" }[] = [
   { key: "last_price", label: "Siste kurs", align: "right" },
   { key: "value", label: "Verdi", align: "right" },
   { key: "value_nok", label: "Verdi NOK", align: "right" },
+  { key: "today_pct", label: "I dag %", align: "right" },
   { key: "return_pct", label: "Avkast. %", align: "right" },
   { key: "return_nok", label: "Avkast. NOK", align: "right" },
 ];
@@ -95,7 +96,7 @@ export default function HoldingsTable({ holdings }: HoldingsTableProps) {
         </thead>
         <tbody>
           {sorted.map((h) => (
-            <tr key={h.id} className="border-t border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800/50">
+            <tr key={h.ticker} className="border-t border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800/50">
               <td className="px-4 py-3 font-medium text-gray-900 dark:text-gray-100">{h.name}</td>
               <td className="px-4 py-3 text-gray-500 dark:text-gray-400">{h.ticker}</td>
               <td className="px-4 py-3 text-right text-gray-700 dark:text-gray-300">{h.currency}</td>
@@ -105,6 +106,13 @@ export default function HoldingsTable({ holdings }: HoldingsTableProps) {
               <td className="px-4 py-3 text-right text-gray-700 dark:text-gray-300">{formatNum(h.value)}</td>
               <td className="px-4 py-3 text-right font-medium text-gray-900 dark:text-gray-100">
                 {formatNum(h.value_nok, 0)}
+              </td>
+              <td
+                className={`px-4 py-3 text-right ${
+                  (h.today_pct ?? 0) >= 0 ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"
+                }`}
+              >
+                {h.today_pct !== null ? `${h.today_pct >= 0 ? "+" : ""}${formatNum(h.today_pct)}%` : "-"}
               </td>
               <td
                 className={`px-4 py-3 text-right ${

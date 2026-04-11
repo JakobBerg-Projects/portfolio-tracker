@@ -169,7 +169,7 @@ export default function PortfolioTreemap({ holdings }: PortfolioTreemapProps) {
       >
         <div className="absolute inset-0">
           {rects.map((rect, i) => {
-            const todayPct = rect.holding.return_pct ?? 0;
+            const todayPct = rect.holding.today_pct ?? 0;
             const minDim = Math.min(
               (rect.w / 100) * 1000,
               (rect.h / 100) * 600,
@@ -179,7 +179,7 @@ export default function PortfolioTreemap({ holdings }: PortfolioTreemapProps) {
 
             return (
               <div
-                key={rect.holding.id}
+                key={rect.holding.ticker}
                 className="absolute flex flex-col items-center justify-center text-white font-bold transition-opacity hover:opacity-80 cursor-default"
                 style={{
                   left: `${rect.x}%`,
@@ -237,7 +237,7 @@ export default function PortfolioTreemap({ holdings }: PortfolioTreemapProps) {
                 maximumFractionDigits: 0,
               }).format(tooltip.holding.value_nok ?? 0)}
             </p>
-            <p>I dag: {formatPct(tooltip.holding.return_pct)}</p>
+            <p>I dag: {formatPct(tooltip.holding.today_pct)}</p>
           </div>
         )}
       </div>

@@ -80,7 +80,7 @@ export default function CSVUpload({ onUploadSuccess }: CSVUploadProps) {
         }`}
       >
         <p className="text-gray-600 dark:text-gray-400 mb-2">
-          Dra og slipp Nordnet CSV-fil her, eller
+          Dra og slipp Nordnet transaksjonshistorikk (CSV) her, eller
         </p>
         <label className="cursor-pointer inline-block bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 transition-colors">
           {isUploading ? "Laster opp..." : "Velg fil"}

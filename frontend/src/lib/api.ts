@@ -10,6 +10,7 @@ export interface Holding {
   last_price: number | null;
   value: number | null;
   value_nok: number | null;
+  today_pct: number | null;
   return_pct: number | null;
   return_nok: number | null;
 }
@@ -35,7 +36,7 @@ export interface Allocation {
   percentage: number;
 }
 
-export async function uploadCSV(file: File, mode: "replace" | "append" = "replace"): Promise<{ message: string; holdings_count: number; holdings: Holding[] }> {
+export async function uploadCSV(file: File, mode: "replace" | "append" = "replace"): Promise<{ message: string; transaction_count: number }> {
   const formData = new FormData();
   formData.append("file", file);
 

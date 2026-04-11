@@ -1,5 +1,4 @@
 from pydantic import BaseModel
-from datetime import datetime
 
 
 class HoldingResponse(BaseModel):
@@ -14,8 +13,7 @@ class HoldingResponse(BaseModel):
     value_nok: float | None
     return_pct: float | None
     return_nok: float | None
-
-    model_config = {"from_attributes": True}
+    today_pct: float | None = None
 
 
 class PortfolioSummary(BaseModel):
@@ -34,5 +32,4 @@ class PortfolioHistoryPoint(BaseModel):
 
 class UploadResponse(BaseModel):
     message: str
-    holdings_count: int
-    holdings: list[HoldingResponse]
+    transaction_count: int

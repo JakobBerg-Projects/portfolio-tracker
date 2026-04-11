@@ -1,21 +1,75 @@
+from datetime import date as date_type
+
 from fastapi import APIRouter, Depends, UploadFile, File, HTTPException
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.models.holding import Holding, PortfolioSnapshot
+from app.models.holding import Transaction
 from app.schemas.portfolio import (
     HoldingResponse,
     PortfolioSummary,
     PortfolioHistoryPoint,
     UploadResponse,
 )
-from app.services.nordnet_parser import parse_nordnet_csv
+from app.services.nordnet_parser import parse_nordnet_transactions
 from app.services.market_data import (
     calculate_portfolio_history,
     fetch_exchange_rate,
+    fetch_live_data,
 )
 
 router = APIRouter(prefix="/api/portfolio", tags=["portfolio"])
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+def _derive_holdings(transactions) -> list[dict]:
+    """Derive current positions from transaction history (weighted-average cost)."""
+    positions: dict[str, dict] = {}
+
+    for txn in sorted(transactions, key=lambda t: t.trade_date):
+        ticker = txn.ticker
+        if not ticker:
+            continue
+
+        if ticker not in positions:
+            positions[ticker] = {
+                "name": txn.name,
+                "ticker": ticker,
+                "isin": txn.isin,
+                "currency": txn.currency,
+                "quantity": 0.0,
+                "cost_native": 0.0,
+                "cost_nok": 0.0,
+            }
+
+        if txn.transaction_type == "KJØPT":
+            positions[ticker]["quantity"] += txn.quantity
+            positions[ticker]["cost_native"] += txn.quantity * txn.price
+            positions[ticker]["cost_nok"] += abs(txn.amount_nok or 0)
+        elif txn.transaction_type == "SALG":
+            qty = positions[ticker]["quantity"]
+            if qty > 0:
+                ratio = min(txn.quantity / qty, 1.0)
+                positions[ticker]["cost_native"] *= 1 - ratio
+                positions[ticker]["cost_nok"] *= 1 - ratio
+            positions[ticker]["quantity"] -= txn.quantity
+
+    result = []
+    for pos in positions.values():
+        if pos["quantity"] > 0.001:
+            avg_price = (
+                pos["cost_native"] / pos["quantity"] if pos["quantity"] > 0 else 0
+            )
+            result.append({**pos, "avg_price": avg_price})
+    return result
+
+
+# ---------------------------------------------------------------------------
+# Endpoints
+# ---------------------------------------------------------------------------
 
 
 @router.post("/upload", response_model=UploadResponse)
@@ -24,9 +78,8 @@ async def upload_csv(
     mode: str = "replace",
     db: Session = Depends(get_db),
 ):
-    """Upload a Nordnet CSV file. mode=replace (default) or mode=append."""
+    """Upload a Nordnet transaction-history CSV."""
     content = await file.read()
-    # Nordnet exports can be UTF-16-LE (starts with 0xFF 0xFE) or UTF-8
     for encoding in ["utf-16", "utf-8-sig", "latin-1"]:
         try:
             csv_text = content.decode(encoding)
@@ -36,45 +89,111 @@ async def upload_csv(
     else:
         raise HTTPException(status_code=400, detail="Could not decode CSV file")
 
-    parsed = parse_nordnet_csv(csv_text)
+    parsed = parse_nordnet_transactions(csv_text)
     if not parsed:
-        raise HTTPException(status_code=400, detail="No holdings found in CSV")
+        raise HTTPException(status_code=400, detail="No transactions found in CSV")
 
     if mode == "replace":
-        db.query(Holding).delete()
+        db.query(Transaction).delete()
 
-    # Insert new holdings
-    db_holdings = []
-    for h in parsed:
-        holding = Holding(**h)
-        db.add(holding)
-        db_holdings.append(holding)
+    count = 0
+    for t in parsed:
+        if mode == "append" and t["nordnet_id"]:
+            exists = (
+                db.query(Transaction)
+                .filter_by(nordnet_id=t["nordnet_id"])
+                .first()
+            )
+            if exists:
+                continue
+
+        db.add(
+            Transaction(
+                nordnet_id=t["nordnet_id"] or None,
+                trade_date=date_type.fromisoformat(t["trade_date"]),
+                transaction_type=t["transaction_type"],
+                name=t["name"],
+                isin=t["isin"],
+                ticker=t["ticker"],
+                quantity=t["quantity"],
+                price=t["price"],
+                currency=t["currency"],
+                amount_nok=t["amount_nok"],
+                fees_nok=t["fees_nok"],
+                exchange_rate=t["exchange_rate"],
+            )
+        )
+        count += 1
 
     db.commit()
-
-    # Refresh to get IDs
-    for h in db_holdings:
-        db.refresh(h)
-
     return UploadResponse(
-        message=f"Successfully imported {len(db_holdings)} holdings",
-        holdings_count=len(db_holdings),
-        holdings=[HoldingResponse.model_validate(h) for h in db_holdings],
+        message=f"Importerte {count} transaksjoner",
+        transaction_count=count,
     )
 
 
-@router.get("/holdings", response_model=list[HoldingResponse])
+@router.get("/holdings")
 def get_holdings(db: Session = Depends(get_db)):
-    """Get all current holdings."""
-    holdings = db.query(Holding).all()
-    return [HoldingResponse.model_validate(h) for h in holdings]
+    """Derive current holdings from transactions, enriched with live prices."""
+    transactions = db.query(Transaction).order_by(Transaction.trade_date).all()
+    if not transactions:
+        return []
+
+    holdings = _derive_holdings(transactions)
+    if not holdings:
+        return []
+
+    tickers = [h["ticker"] for h in holdings]
+    current_prices, today_changes = fetch_live_data(tickers)
+    usd_nok = fetch_exchange_rate("USD", "NOK")
+
+    results = []
+    for i, h in enumerate(holdings):
+        price = current_prices.get(h["ticker"])
+        value = price * h["quantity"] if price else None
+        value_nok = value
+        if value is not None and h["currency"] != "NOK":
+            value_nok = value * usd_nok
+
+        cost_nok = h["cost_nok"]
+        return_nok = (value_nok - cost_nok) if value_nok else None
+        return_pct = (
+            (return_nok / cost_nok * 100) if return_nok is not None and cost_nok > 0 else None
+        )
+
+        results.append(
+            HoldingResponse(
+                id=i + 1,
+                name=h["name"],
+                ticker=h["ticker"],
+                currency=h["currency"],
+                quantity=round(h["quantity"], 4),
+                avg_price=round(h["avg_price"], 2),
+                last_price=round(price, 2) if price else None,
+                value=round(value, 2) if value else None,
+                value_nok=round(value_nok, 2) if value_nok else None,
+                today_pct=today_changes.get(h["ticker"]),
+                return_pct=round(return_pct, 2) if return_pct is not None else None,
+                return_nok=round(return_nok, 2) if return_nok is not None else None,
+            ).model_dump()
+        )
+
+    return results
 
 
 @router.get("/summary", response_model=PortfolioSummary)
 def get_summary(db: Session = Depends(get_db)):
-    """Get portfolio summary with totals."""
-    holdings = db.query(Holding).all()
+    transactions = db.query(Transaction).order_by(Transaction.trade_date).all()
+    if not transactions:
+        return PortfolioSummary(
+            total_value_nok=0,
+            total_value_usd=0,
+            total_return_nok=0,
+            total_return_pct=0,
+            holdings_count=0,
+        )
 
+    holdings = _derive_holdings(transactions)
     if not holdings:
         return PortfolioSummary(
             total_value_nok=0,
@@ -84,11 +203,23 @@ def get_summary(db: Session = Depends(get_db)):
             holdings_count=0,
         )
 
-    total_value_nok = sum(h.value_nok or 0 for h in holdings)
-    total_return_nok = sum(h.return_nok or 0 for h in holdings)
-    total_cost_nok = total_value_nok - total_return_nok
-
+    tickers = [h["ticker"] for h in holdings]
+    current_prices, _ = fetch_live_data(tickers)
     usd_nok = fetch_exchange_rate("USD", "NOK")
+
+    total_value_nok = 0.0
+    total_cost_nok = 0.0
+    for h in holdings:
+        price = current_prices.get(h["ticker"])
+        if price is None:
+            continue
+        value = price * h["quantity"]
+        if h["currency"] != "NOK":
+            value *= usd_nok
+        total_value_nok += value
+        total_cost_nok += h["cost_nok"]
+
+    total_return_nok = total_value_nok - total_cost_nok
     total_value_usd = total_value_nok / usd_nok if usd_nok > 0 else 0
 
     return PortfolioSummary(
@@ -104,43 +235,59 @@ def get_summary(db: Session = Depends(get_db)):
 
 @router.get("/history", response_model=list[PortfolioHistoryPoint])
 def get_history(period: str = "1y", db: Session = Depends(get_db)):
-    """Get portfolio value over time."""
-    holdings = db.query(Holding).all()
-
-    if not holdings:
+    transactions = db.query(Transaction).order_by(Transaction.trade_date).all()
+    if not transactions:
         return []
 
-    holdings_data = [
+    txn_data = [
         {
-            "ticker": h.ticker,
-            "quantity": h.quantity,
-            "currency": h.currency,
+            "trade_date": t.trade_date,
+            "transaction_type": t.transaction_type,
+            "ticker": t.ticker,
+            "quantity": t.quantity,
+            "currency": t.currency,
         }
-        for h in holdings
+        for t in transactions
     ]
 
-    history = calculate_portfolio_history(holdings_data, period)
+    history = calculate_portfolio_history(txn_data, period)
     return [PortfolioHistoryPoint(**point) for point in history]
 
 
 @router.get("/allocation")
 def get_allocation(db: Session = Depends(get_db)):
-    """Get portfolio allocation for pie chart."""
-    holdings = db.query(Holding).all()
+    transactions = db.query(Transaction).order_by(Transaction.trade_date).all()
+    if not transactions:
+        return []
 
+    holdings = _derive_holdings(transactions)
     if not holdings:
         return []
 
-    total = sum(h.value_nok or 0 for h in holdings)
+    tickers = [h["ticker"] for h in holdings]
+    current_prices, _ = fetch_live_data(tickers)
+    usd_nok = fetch_exchange_rate("USD", "NOK")
+
+    items = []
+    for h in holdings:
+        price = current_prices.get(h["ticker"])
+        if price is None:
+            continue
+        value = price * h["quantity"]
+        if h["currency"] != "NOK":
+            value *= usd_nok
+        items.append({"name": h["name"], "ticker": h["ticker"], "value_nok": value})
+
+    total = sum(it["value_nok"] for it in items)
     if total == 0:
         return []
 
     return [
         {
-            "name": h.name,
-            "ticker": h.ticker,
-            "value_nok": round(h.value_nok or 0, 2),
-            "percentage": round((h.value_nok or 0) / total * 100, 2),
+            "name": it["name"],
+            "ticker": it["ticker"],
+            "value_nok": round(it["value_nok"], 2),
+            "percentage": round(it["value_nok"] / total * 100, 2),
         }
-        for h in holdings
+        for it in items
     ]
