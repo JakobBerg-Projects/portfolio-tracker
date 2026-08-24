@@ -150,15 +150,25 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-Create `backend/.env`:
+Copy the example env file and fill in your own values:
+
+```bash
+cp .env.example .env
+```
+
+`backend/.env`:
 
 ```
 DATABASE_URL=postgresql+psycopg://<user>:<password>@<host>:5432/<database>
 ANTHROPIC_API_KEY=sk-ant-...
+JWT_SECRET_KEY=<a long random string>
 ```
 
-> Using Supabase? Grab the **Session pooler** connection string from
-> *Connect → Session pooler* and change the scheme to `postgresql+psycopg://`.
+> - Using Supabase? Grab the **Session pooler** connection string from
+>   *Connect → Session pooler* and change the scheme to `postgresql+psycopg://`.
+> - Generate a `JWT_SECRET_KEY` with
+>   `python -c "import secrets; print(secrets.token_urlsafe(48))"`. It signs your
+>   login tokens — set a real value before deploying anywhere public.
 
 Run it (tables are created automatically on startup):
 
@@ -175,7 +185,13 @@ cd frontend
 npm install
 ```
 
-Create `frontend/.env.local`:
+Copy the example env file:
+
+```bash
+cp .env.example .env.local
+```
+
+`frontend/.env.local`:
 
 ```
 NEXT_PUBLIC_API_URL=http://localhost:8000
