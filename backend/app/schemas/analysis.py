@@ -61,3 +61,25 @@ class ContagionAnalysisResponse(BaseModel):
     normal_days: int
     stress_threshold_pct: float
     period: str
+
+
+class BiasResult(BaseModel):
+    id: str
+    name: str
+    description: str
+    detected: bool
+    severity: int
+    metrics: dict
+    detail: str
+    examples: dict
+
+
+class BehavioralBiasResponse(BaseModel):
+    biases: list[BiasResult]
+    bias_score: int
+    total_transactions: int
+    total_sells: int
+    total_buys: int
+    unique_tickers: int
+    period_start: str
+    period_end: str

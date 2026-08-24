@@ -8,6 +8,7 @@ import { useAuth } from "@/lib/auth-context";
 const TABS = [
   { href: "/", label: "Oversikt" },
   { href: "/analysis", label: "Analyse" },
+  { href: "/ai", label: "AI" },
 ];
 
 interface NavigationProps {

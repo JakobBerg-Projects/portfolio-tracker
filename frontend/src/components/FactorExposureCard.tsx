@@ -122,12 +122,18 @@ function buildInterpretation(data: FactorExposure): string[] {
     const alphaFactor = getFactorByKey(factors, "Alpha");
     if (alphaFactor?.significant) {
       if (alpha > 0) {
-        lines.push(`Porteføljen har generert en meravkastning (alpha) på ${alpha.toFixed(1)}% årlig utover det faktorene forklarer. Merk at høy alpha over korte perioder ofte skyldes konsentrasjonsrisiko snarere enn dyktighet.`);
+        lines.push(`Porteføljen har generert en statistisk signifikant meravkastning (alpha) på ${alpha.toFixed(1)}% årlig utover det faktorene forklarer. Merk at høy alpha over korte perioder ofte skyldes konsentrasjonsrisiko snarere enn dyktighet.`);
       } else {
-        lines.push(`Porteføljen har underprestert med ${Math.abs(alpha).toFixed(1)}% årlig relativt til faktoreksponeringen.`);
+        lines.push(`Porteføljen har underprestert med ${Math.abs(alpha).toFixed(1)}% årlig relativt til faktoreksponeringen. Denne underprestasjonen er statistisk signifikant.`);
       }
     } else {
-      lines.push(`Alpha på ${alpha > 0 ? "+" : ""}${alpha.toFixed(1)}% er ikke statistisk signifikant. Det er ikke nok data til å si om meravkastningen er reell eller tilfeldig.`);
+      const tStat = alphaFactor?.t_stat ?? 0;
+      const nObs = data.n_observations;
+      if (alpha > 0) {
+        lines.push(`Alpha på +${alpha.toFixed(1)}% årlig er ikke statistisk signifikant (t=${tStat.toFixed(2)}, n=${nObs}). Selv om tallet virker høyt, skyldes det at den daglige meravkastningen er liten sammenlignet med porteføljens daglige svingninger. Over kort tid og med høy volatilitet kan man ikke skille denne avkastningen fra tilfeldigheter. Lengre tidsperiode eller lavere volatilitet ville gitt et tydeligere bilde.`);
+      } else {
+        lines.push(`Alpha på ${alpha.toFixed(1)}% årlig er ikke statistisk signifikant (t=${tStat.toFixed(2)}, n=${nObs}). Den daglige underprestasjonen er for liten relativt til porteføljens daglige svingninger til å fastslå at den er reell.`);
+      }
     }
   }
 

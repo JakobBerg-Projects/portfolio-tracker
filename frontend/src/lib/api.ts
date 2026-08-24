@@ -180,3 +180,65 @@ export async function getContagionAnalysis(period: string = "1y"): Promise<Conta
   if (!res.ok) throw new Error("Failed to fetch contagion analysis");
   return res.json();
 }
+
+// --- Behavioral Biases ---
+
+export interface BiasExample {
+  [key: string]: unknown;
+}
+
+export interface BiasResult {
+  id: string;
+  name: string;
+  description: string;
+  detected: boolean;
+  severity: number;
+  metrics: Record<string, number>;
+  detail: string;
+  examples: Record<string, BiasExample[]>;
+}
+
+export interface BehavioralBiases {
+  biases: BiasResult[];
+  bias_score: number;
+  total_transactions: number;
+  total_sells: number;
+  total_buys: number;
+  unique_tickers: number;
+  period_start: string;
+  period_end: string;
+  error?: string;
+}
+
+export async function getBehavioralBiases(): Promise<BehavioralBiases> {
+  const res = await fetch(`${API_BASE}/api/analysis/behavioral`, { headers: authHeaders() });
+  if (!res.ok) throw new Error("Failed to fetch behavioral biases");
+  return res.json();
+}
+
+// --- AI Chat ---
+
+export interface AIChatMessage {
+  role: "user" | "assistant";
+  content: string;
+}
+
+export async function sendAIChat(messages: AIChatMessage[]): Promise<string> {
+  const res = await fetch(`${API_BASE}/api/ai/chat`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...authHeaders() },
+    body: JSON.stringify({ messages }),
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    let detail = "AI chat failed";
+    try {
+      detail = JSON.parse(text).detail || detail;
+    } catch {
+      detail = text || detail;
+    }
+    throw new Error(detail);
+  }
+  const data = await res.json();
+  return data.reply;
+}

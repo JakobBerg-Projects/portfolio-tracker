@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Float, DateTime, Date, ForeignKey
+from sqlalchemy import Column, Integer, String, Float, DateTime, Date, ForeignKey, UniqueConstraint
 from sqlalchemy.sql import func
 from app.database import Base
 
@@ -6,9 +6,15 @@ from app.database import Base
 class Transaction(Base):
     __tablename__ = "transactions"
 
+    # A Nordnet transaction id is unique per user, not globally — two accounts
+    # may legitimately import the same id.
+    __table_args__ = (
+        UniqueConstraint("user_id", "nordnet_id", name="uq_transactions_user_nordnet"),
+    )
+
     id = Column(Integer, primary_key=True, autoincrement=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
-    nordnet_id = Column(String, unique=True, index=True)
+    nordnet_id = Column(String, index=True)
     trade_date = Column(Date, nullable=False, index=True)
     transaction_type = Column(String, nullable=False)  # KJØPT / SALG
     name = Column(String, nullable=False)
@@ -21,23 +27,6 @@ class Transaction(Base):
     fees_nok = Column(Float)
     exchange_rate = Column(Float)
 
-
-# Legacy — kept so existing DB table isn't orphaned
-class Holding(Base):
-    __tablename__ = "holdings"
-
-    id = Column(Integer, primary_key=True, index=True)
-    name = Column(String, nullable=False)
-    ticker = Column(String, nullable=False)
-    currency = Column(String, nullable=False)
-    quantity = Column(Float, nullable=False)
-    avg_price = Column(Float, nullable=False)
-    last_price = Column(Float, nullable=True)
-    value = Column(Float, nullable=True)
-    value_nok = Column(Float, nullable=True)
-    return_pct = Column(Float, nullable=True)
-    return_nok = Column(Float, nullable=True)
-    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
 
 
 class PriceHistory(Base):

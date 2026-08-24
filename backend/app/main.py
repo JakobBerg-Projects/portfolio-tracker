@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.database import engine, Base
 from app.models import user  # noqa: F401 — ensure User table is created
-from app.routers import portfolio, analysis, auth
+from app.routers import portfolio, analysis, auth, ai_chat
 
 # Create tables
 Base.metadata.create_all(bind=engine)
@@ -33,6 +33,7 @@ app.add_middleware(
 app.include_router(auth.router)
 app.include_router(portfolio.router)
 app.include_router(analysis.router)
+app.include_router(ai_chat.router)
 
 
 @app.get("/api/health")

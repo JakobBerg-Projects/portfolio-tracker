@@ -11,6 +11,7 @@ from app.schemas.analysis import (
     RiskMetricsResponse,
     CorrelationMatrixResponse,
     ContagionAnalysisResponse,
+    BehavioralBiasResponse,
 )
 from app.services.analysis import (
     compute_factor_exposure,
@@ -18,6 +19,7 @@ from app.services.analysis import (
     compute_correlation_matrix,
     compute_contagion_analysis,
 )
+from app.services.behavioral import compute_behavioral_biases
 
 router = APIRouter(prefix="/api/analysis", tags=["analysis"])
 
@@ -84,3 +86,32 @@ def get_contagion_analysis(period: str = "1y", db: Session = Depends(get_db), cu
         return JSONResponse(status_code=200, content=result)
 
     return ContagionAnalysisResponse(**result)
+
+
+@router.get("/behavioral")
+def get_behavioral_biases(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """Behavioral bias detection from transaction history."""
+    transactions = db.query(Transaction).filter_by(user_id=current_user.id).order_by(Transaction.trade_date).all()
+    if not transactions:
+        raise HTTPException(status_code=404, detail="Ingen transaksjoner funnet")
+
+    txn_data = [
+        {
+            "trade_date": t.trade_date,
+            "transaction_type": t.transaction_type,
+            "ticker": t.ticker,
+            "name": t.name,
+            "quantity": t.quantity,
+            "price": t.price,
+            "currency": t.currency,
+            "amount_nok": t.amount_nok,
+        }
+        for t in transactions
+    ]
+
+    result = compute_behavioral_biases(txn_data)
+
+    if "error" in result:
+        return JSONResponse(status_code=200, content=result)
+
+    return BehavioralBiasResponse(**result)

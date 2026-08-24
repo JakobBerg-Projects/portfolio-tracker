@@ -5,16 +5,19 @@ import RiskMetricsCard from "@/components/RiskMetricsCard";
 import FactorExposureCard from "@/components/FactorExposureCard";
 import CorrelationMatrixCard from "@/components/CorrelationMatrixCard";
 import ContagionCard from "@/components/ContagionCard";
+import BehavioralBiasCard from "@/components/BehavioralBiasCard";
 import {
   getRiskMetrics,
   getFactorExposure,
   getCorrelationMatrix,
   getContagionAnalysis,
+  getBehavioralBiases,
   getSummary,
   RiskMetrics,
   FactorExposure,
   CorrelationMatrix,
   ContagionAnalysis,
+  BehavioralBiases,
 } from "@/lib/api";
 
 const PERIODS = [
@@ -33,10 +36,12 @@ export default function AnalysisPage() {
   const [factors, setFactors] = useState<FactorExposure | null>(null);
   const [correlation, setCorrelation] = useState<CorrelationMatrix | null>(null);
   const [contagion, setContagion] = useState<ContagionAnalysis | null>(null);
+  const [behavioral, setBehavioral] = useState<BehavioralBiases | null>(null);
   const [loadingRisk, setLoadingRisk] = useState(false);
   const [loadingFactors, setLoadingFactors] = useState(false);
   const [loadingCorrelation, setLoadingCorrelation] = useState(false);
   const [loadingContagion, setLoadingContagion] = useState(false);
+  const [loadingBehavioral, setLoadingBehavioral] = useState(false);
   const [hasHoldings, setHasHoldings] = useState<boolean | null>(null);
 
   useEffect(() => {
@@ -72,6 +77,12 @@ export default function AnalysisPage() {
       .then(setContagion)
       .catch(() => setContagion(null))
       .finally(() => setLoadingContagion(false));
+
+    setLoadingBehavioral(true);
+    getBehavioralBiases()
+      .then(setBehavioral)
+      .catch(() => setBehavioral(null))
+      .finally(() => setLoadingBehavioral(false));
   }, [period, hasHoldings]);
 
   if (hasHoldings === null) {
@@ -124,6 +135,7 @@ export default function AnalysisPage() {
 
       <CorrelationMatrixCard data={correlation} loading={loadingCorrelation} />
       <ContagionCard data={contagion} loading={loadingContagion} />
+      <BehavioralBiasCard data={behavioral} loading={loadingBehavioral} />
     </main>
   );
 }
