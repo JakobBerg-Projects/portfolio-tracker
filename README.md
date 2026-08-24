@@ -101,7 +101,7 @@ disposition effect, loss aversion, overtrading, concentration bias, and
 anchoring / averaging-down.
 
 <p align="center">
-  <img src="imgs/analysisi4.png" width="900" alt="Behavioral bias detector">
+  <img src="imgs/analysis4.png" width="900" alt="Behavioral bias detector">
 </p>
 
 ### AI advisor
